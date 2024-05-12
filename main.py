@@ -60,7 +60,7 @@ def parse_dataset_path(dataset_path: Path):
 def link_dir(src_path: Path, dest_path: Path):
     try:
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.rmtree(dest_path.absolute(), ignore_errors=True)
+        dest_path.unlink(missing_ok=True)
         if os.name == 'nt':
             os.symlink(str(src_path.absolute()), str(dest_path.absolute()))
         else:
