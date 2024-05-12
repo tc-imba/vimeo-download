@@ -53,7 +53,7 @@ def parse_dataset_path(dataset_path: Path):
         logger.info(f"{file}")
 
         if len(file.parent.name) == 4:
-            return file.parent.parent.parent.parent
+            return file.parent.parent.parent
     return None
 
 
@@ -78,12 +78,11 @@ def parse(dataset, workers):
         logger.error("dataset error!")
         return
 
-    test_files = parse_sep_file(dataset_path / "sep_testlist.txt")
-    train_files = parse_sep_file(dataset_path / "sep_trainlist.txt")
-    data_files = dataset_path / "sequences"
+    test_files = parse_sep_file(dataset_path.parent / "sep_testlist.txt")
+    train_files = parse_sep_file(dataset_path.parent / "sep_trainlist.txt")
 
     major_indexes = []
-    for major_index_dir in data_files.iterdir():
+    for major_index_dir in dataset_path.iterdir():
         if major_index_dir.is_dir():
             major_indexes.append(major_index_dir.name)
 
@@ -99,7 +98,7 @@ def parse(dataset, workers):
             # logger.warning("{}/{} not in train or test!", major_index, minor_index)
             file_type = "other"
 
-        dest_path = dataset_path / file_type / f"{major_index}-{minor_index}"
+        dest_path = dataset_path.parent / file_type / f"{major_index}-{minor_index}"
         link_dir(minor_index_dir, dest_path)
         # shutil.copytree(minor_index_dir, dataset_path / file_type / f"{major_index}-{minor_index}",
         #                 dirs_exist_ok=True)
@@ -108,7 +107,7 @@ def parse(dataset, workers):
         for major_index in major_indexes:
             with ThreadPoolExecutor(max_workers=workers) as ex:
                 futures = [ex.submit(parse_minor_dir, major_index, minor_index_dir) for minor_index_dir in
-                           (data_files / str(major_index)).iterdir()]
+                           (dataset_path / str(major_index)).iterdir()]
                 for future in as_completed(futures):
                     result = future.result()
                     pbar.update(1)
@@ -134,7 +133,6 @@ def merge(input, output, workers):
     def worker(src_path, file_type):
         if src_path.is_dir():
             dest_path = output_dataset_path / file_type / src_path.name
-            dest_path.mkdir(parents=True, exist_ok=True)
             link_dir(src_path, dest_path)
 
 
@@ -143,7 +141,7 @@ def merge(input, output, workers):
             with ThreadPoolExecutor(max_workers=workers) as ex:
                 futures = []
                 for file_type in ("test", "train", "other"):
-                    for src_path in (sub_dataset_path / file_type).iterdir():
+                    for src_path in (sub_dataset_path.parent / file_type).iterdir():
                         futures.append(ex.submit(worker, src_path, file_type))
                 pbar.total += len(futures) - 10000
                 for future in as_completed(futures):
