@@ -8,6 +8,7 @@ import functools
 from loguru import logger
 from tqdm import tqdm
 import os
+import shutil
 
 logger.remove()
 logger.add(lambda msg: tqdm.write(msg, end=""))
@@ -36,7 +37,7 @@ def download(owner: str, dataset: str):
     if (dataset_dir / dataset).exists():
         logger.warning("dataset {} already exists!", dataset)
         return
-    od.download(dataset_url, str(dataset_dir.resolve()))
+    od.download(dataset_url, str(dataset_dir.absolute()))
 
 
 def parse_sep_file(sep_file: Path):
@@ -48,13 +49,24 @@ def parse_sep_file(sep_file: Path):
 
 
 def parse_dataset_path(dataset_path: Path):
-    if (dataset_path / "sequences").exists():
-        return dataset_path
-    for path in dataset_path.iterdir():
-        if path.is_dir() and (path / "sequences").exists():
-            return path
+    for file in dataset_path.rglob("*.png"):
+        logger.info(f"{file}")
+
+        if len(file.parent.name) == 4:
+            return file.parent.parent.parent.parent
     return None
 
+
+def link_dir(src_path: Path, dest_path: Path):
+    try:
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(dest_path.absolute(), ignore_errors=True)
+        if os.name == 'nt':
+            os.symlink(str(src_path.absolute()), str(dest_path.absolute()))
+        else:
+            os.system(f"ln -s {src_path.absolute()} {dest_path.absolute()}")
+    except Exception as e:
+        logger.exception(e)
 
 @cli_group.command()
 @click.option("--dataset", default="vimeo-90k-00001")
@@ -88,11 +100,7 @@ def parse(dataset, workers):
             file_type = "other"
 
         dest_path = dataset_path / file_type / f"{major_index}-{minor_index}"
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            os.symlink(str(minor_index_dir.resolve()), str(dest_path.resolve()))
-        except:
-            pass
+        link_dir(minor_index_dir, dest_path)
         # shutil.copytree(minor_index_dir, dataset_path / file_type / f"{major_index}-{minor_index}",
         #                 dirs_exist_ok=True)
 
@@ -127,10 +135,8 @@ def merge(input, output, workers):
         if src_path.is_dir():
             dest_path = output_dataset_path / file_type / src_path.name
             dest_path.mkdir(parents=True, exist_ok=True)
-            try:
-                os.symlink(str(src_path.resolve()), str(dest_path.resolve()))
-            except:
-                pass
+            link_dir(src_path, dest_path)
+
 
     with tqdm(total=len(sub_dataset_paths) * 10000) as pbar:
         for sub_dataset_path in sub_dataset_paths:
